@@ -6,23 +6,26 @@ using System.Windows.Forms;
 public class GooseInputForm : Form
 {
     private GooseAIConfig _cfg = GooseAIConfig.Load();
-    private readonly TextBox _input;
+    internal readonly TextBox _input;
     private readonly Button _ok;
     private readonly Button _cancel;
     private readonly Label _promptLabel;
-    internal static GooseInputForm _instance;
-    public static GooseEntity CurrentGoose { get; private set; }
-    public static event Action<string> OnInputSubmitted;
-    public string UserInput { get { return _input.Text; } }
+    private readonly Action<string> _onSubmit;
+    private readonly Timer _autoCloseTimer;
 
-    private GooseInputForm(Point screenPos, string prompt, GooseEntity goose)
+    public GooseInputForm(Point screenPos, string prompt, GooseEntity goose, Action<string> onSubmit)
     {
-        CurrentGoose = goose;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        _onSubmit = onSubmit;
+        
+        // Sin botones de maximizar/minimizar
+        FormBorderStyle = FormBorderStyle.FixedSingle;
+        MinimizeBox = false;
+        MaximizeBox = false;
         StartPosition = FormStartPosition.Manual;
         BackColor = Color.White;
         ForeColor = Color.Black;
         Padding = new Padding(10);
+        ShowIcon = false;
         
         Location = new Point(screenPos.X, screenPos.Y - 45);
         
@@ -58,12 +61,7 @@ public class GooseInputForm : Form
             Font = new Font("Arial", 10),
             Size = new Size(80, 25)
         };
-        _ok.Click += (s, e) => 
-        {
-            var input = _input.Text; 
-            if (!string.IsNullOrWhiteSpace(input) && OnInputSubmitted != null) OnInputSubmitted(input); 
-            SafeClose();
-        };
+        _ok.Click += (s, e) => HandleSubmit();
 
         _cancel = new Button
         {
@@ -73,19 +71,17 @@ public class GooseInputForm : Form
             Font = new Font("Arial", 10),
             Size = new Size(80, 25)
         };
-        _cancel.Click += (s, e) => SafeClose();
+        _cancel.Click += (s, e) => Close();
 
         _input.KeyDown += (s, e) =>
         {
             if (e.KeyCode == Keys.Enter)
             {
                 e.Handled = true; e.SuppressKeyPress = true;
-                var input = _input.Text; 
-                if (!string.IsNullOrWhiteSpace(input) && OnInputSubmitted != null) OnInputSubmitted(input);
-                SafeClose();
+                HandleSubmit();
             }
             else if (e.KeyCode == Keys.Escape)
-            { e.Handled = true; e.SuppressKeyPress = true; SafeClose(); }
+            { e.Handled = true; e.SuppressKeyPress = true; Close(); }
         };
 
         Resize += (s, e) =>
@@ -119,53 +115,39 @@ public class GooseInputForm : Form
                 e.Graphics.DrawLine(pen, 0, radius / 2, 0, Height - radius / 2 - 1);
             }
         };
+        
+        // Auto-close timer: 15 seconds
+        _autoCloseTimer = new Timer { Interval = 15000, Enabled = true };
+        _autoCloseTimer.Tick += (s, e) => Close();
+        
+        // Reset timer on any activity
+        _input.KeyDown += (s, e) => { _autoCloseTimer.Stop(); _autoCloseTimer.Start(); };
+        _ok.Click += (s, e) => _autoCloseTimer.Stop();
+        _cancel.Click += (s, e) => _autoCloseTimer.Stop();
+        this.MouseMove += (s, e) => { _autoCloseTimer.Stop(); _autoCloseTimer.Start(); };
+        this.MouseDown += (s, e) => { _autoCloseTimer.Stop(); _autoCloseTimer.Start(); };
     }
 
-    public static void ShowAt(Point screenPos, string prompt, GooseEntity goose)
+    private void HandleSubmit()
     {
-        if (_instance != null) { _instance.Close(); _instance.Dispose(); _instance = null; }
-        _instance = new GooseInputForm(screenPos, prompt, goose);
-        _instance.Show();
-        _instance._input.Focus();
-        _instance.BringToFront();
-    }
-
-    public static void CloseCurrent()
-    {
-        if (_instance != null) 
-        {
-            OnInputSubmitted = null;
-            _instance.Close(); 
-            _instance.Dispose(); 
-            _instance = null; 
-            CurrentGoose = null; 
-        }
-    }
-    
-    private void SafeClose()
-    {
-        OnInputSubmitted = null;
+        string input = _input.Text;
+        if (!string.IsNullOrWhiteSpace(input) && _onSubmit != null)
+            _onSubmit(input);
         Close();
-    }
-
-    protected override void OnFormClosing(FormClosingEventArgs e)
-    {
-        if (e.CloseReason == CloseReason.UserClosing) 
-        {
-            e.Cancel = true; 
-            SafeClose();
-        }
-        base.OnFormClosing(e);
-    }
-
-    protected override void OnFormClosed(FormClosedEventArgs e)
-    {
-        if (_instance == this) { _instance = null; CurrentGoose = null; }
-        base.OnFormClosed(e);
     }
     
     public void UpdatePosition(Point goosePosition)
     {
         Location = new Point(goosePosition.X, goosePosition.Y - 45);
+    }
+    
+    public bool IsInputFocused { get { return _input.Focused; } }
+    
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        // Force focus to input box
+        this.Activate();
+        _input.Focus();
     }
 }

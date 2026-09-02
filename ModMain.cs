@@ -9,7 +9,10 @@ public class ModMain : IMod
     private readonly TimeSpan _idleThreshold = TimeSpan.FromMinutes(2);
     private bool _aiTriggered = false, _bubbleAttached = false;
 
-    // Triple-click fields
+    // Form instance for position tracking
+    private static GooseInputForm _inputForm = null;
+
+    // Double-click fields
     private int _clickCount = 0;
     private DateTime _lastClickTime = DateTime.MinValue;
     private const int MaxClickIntervalMs = 500;
@@ -38,10 +41,10 @@ public class ModMain : IMod
             _bubbleAttached = true;
         }
 
-        // Update input form position if it's open
-        if (GooseInputForm._instance != null && GooseInputForm.CurrentGoose != null)
+        // Update input form position if it's open and input doesn't have focus
+        if (_inputForm != null && !_inputForm.IsInputFocused)
         {
-            GooseInputForm._instance.UpdatePosition(new Point((int)goose.position.x, (int)goose.position.y));
+            _inputForm.UpdatePosition(new Point((int)goose.position.x, (int)goose.position.y));
         }
 
         // Idle trigger
@@ -81,6 +84,27 @@ public class ModMain : IMod
 
             // get cursor pos in screen coords
             var cursor = Cursor.Position;
+            
+            // If input form is open, ignore ALL clicks near the goose
+            // This prevents the goose from being dragged when user clicks on form
+            if (_inputForm != null)
+            {
+                // Calculate expanded form bounds (include some padding)
+                Rectangle formBounds = new Rectangle(
+                    _inputForm.Location.X - 50, 
+                    _inputForm.Location.Y - 50,
+                    _inputForm.Width + 100, 
+                    _inputForm.Height + 100
+                );
+                
+                if (formBounds.Contains(cursor))
+                {
+                    // Click is inside or very near the form - ignore it
+                    _clickCount = 0;
+                    _lastClickTime = now;
+                    return;
+                }
+            }
 
             // game coords are also screen coords for Desktop Goose
             float dx = cursor.X - goose.position.x;
@@ -91,7 +115,7 @@ public class ModMain : IMod
                 if (_clickCount >= 2)
                 {
                     // Only trigger if input form is not already open
-                    if (GooseInputForm._instance == null)
+                    if (_inputForm == null)
                     {
                         new TaskAIInteraction().RunTask(goose);
                     }
@@ -112,5 +136,20 @@ public class ModMain : IMod
         GetLastInputInfo(ref lastIn);
         uint idleMs = (uint)(Environment.TickCount - lastIn.dwTime);
         return TimeSpan.FromMilliseconds(idleMs);
+    }
+    
+    public static void SetInputForm(GooseInputForm form)
+    {
+        if (_inputForm != null)
+        {
+            _inputForm.Close();
+            _inputForm.Dispose();
+        }
+        _inputForm = form;
+    }
+    
+    public static void ClearInputForm()
+    {
+        _inputForm = null;
     }
 }

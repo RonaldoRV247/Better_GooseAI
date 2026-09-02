@@ -14,7 +14,7 @@ public class TaskAIInteraction : GooseTaskInfo
 {
     private GooseAIConfig _cfg = GooseAIConfig.Load();
     private static List<object> messageHistory;
-    private static GooseEntity _currentGooseForCallback;
+    private GooseEntity _currentGoose;
 
     public TaskAIInteraction()
     {
@@ -41,6 +41,7 @@ public class TaskAIInteraction : GooseTaskInfo
     
     public override void RunTask(GooseEntity goose)
     {
+        _currentGoose = goose;
         ShowInputPrompt(goose);
         StartIdleChatter(goose);
     }
@@ -49,13 +50,18 @@ public class TaskAIInteraction : GooseTaskInfo
     {
         var pt = new Point((int)goose.position.x, (int)goose.position.y);
         
-        _currentGooseForCallback = goose;
+        // Create form with callback
+        var form = new GooseInputForm(pt, _cfg.bubbleText, goose, HandleInputSubmitted);
         
-        // Suscribir al evento de input antes de mostrar el formulario
-        GooseInputForm.OnInputSubmitted += HandleInputSubmitted;
+        // Set form position tracking
+        ModMain.SetInputForm(form);
         
-        // Mostrar el formulario
-        GooseInputForm.ShowAt(pt, _cfg.bubbleText, goose);
+        // Show form
+        form.Show();
+        form.BringToFront();
+        
+        // Clear reference when form closes
+        form.FormClosed += (s, e) => ModMain.ClearInputForm();
     }
     
     private async void HandleInputSubmitted(string userInput)
@@ -70,9 +76,6 @@ public class TaskAIInteraction : GooseTaskInfo
             var control = new Control();
             control.CreateControl();
             control.Invoke((MethodInvoker)(() => SpeechBubble.Speak(wrapped)));
-            
-            // Cerrar el formulario
-            GooseInputForm.CloseCurrent();
         }
         catch (Exception ex)
         {
@@ -82,12 +85,6 @@ public class TaskAIInteraction : GooseTaskInfo
             control.Invoke((MethodInvoker)(() =>
                 SpeechBubble.Speak("AI Error: " + errorMsg)
             ));
-            GooseInputForm.CloseCurrent();
-        }
-        finally
-        {
-            // Desuscribirse después de manejar el input
-            GooseInputForm.OnInputSubmitted -= HandleInputSubmitted;
         }
     }
 
