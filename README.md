@@ -34,7 +34,7 @@ after this, you should be good to go! read below to modify some extra configs to
 
 ## How to use:
 
-click on the goose 3 times for a input prompt; the input prompt is buggy and you'll have to click on it to start typing into it. Goose also talks randomly after idling. Change the frequency using the config "chanceToSpeak"
+click on the goose 3 times for a input prompt; the input prompt now appears above the goose and is more visible. Goose also talks randomly after idling. Change the frequency using the config "chanceToSpeak"
 
 (sorry i tried multiple solutions but i think its due to the goose grabbing your mouse; including low level input grabbing)
 
@@ -89,6 +89,23 @@ build as regular, and to use you'll have to **move the GooseAI.dll and newtonsof
 ```
 after you have the json file, the 2 dll's, you can run the mod as normal!
 you need the newtonsoft dll otherwise the mod will not work!!!!
+
+## Improvements made
+
+### Multi-Monitor Support
+- Fixed issue where the goose was only visible on one screen. The goose can now be interacted with on any screen and the input form and speech bubbles will appear correctly positioned on the appropriate screen.
+- Input prompt now appears above the goose and stays visible, moving with the goose position.
+
+### Enhanced User Interface
+- Input form is now more visible with improved styling (rounded corners, better borders, minimum size)
+- Input form is positioned relative to the goose and ensures it stays within screen bounds
+- Speech bubbles are adjusted to stay within screen bounds and not go off-screen
+- Added escape key support to close the input form
+
+### Code Improvements
+- Added MultiMonitorHelper class for better multi-screen handling
+- Improved screen detection and positioning logic
+- Better error handling for edge cases
 
 # Contributions
 

@@ -2,6 +2,7 @@
 using System;
 using System.Drawing;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 
 public static class SpeechBubble
 {
@@ -18,9 +19,35 @@ public static class SpeechBubble
         {
             SizeF size = gfx.MeasureString(_text, font);
             const int pad = 6;
+            
+            // Calculate bubble position relative to goose
+            float bubbleX = g.position.x - size.Width / 2 - pad;
+            float bubbleY = g.position.y - 40 - size.Height - pad;
+            
+            // Get the screen where the goose is positioned
+            Point gooseScreenPos = new Point((int)g.position.x, (int)g.position.y);
+            Screen targetScreen = GetScreenForPoint(gooseScreenPos);
+            
+            if (targetScreen != null)
+            {
+                Rectangle screenBounds = targetScreen.Bounds;
+                
+                // Adjust horizontal position if bubble would go off-screen
+                if (bubbleX < screenBounds.Left)
+                    bubbleX = screenBounds.Left + pad;
+                else if (bubbleX + size.Width + pad * 2 > screenBounds.Right)
+                    bubbleX = screenBounds.Right - size.Width - pad * 2;
+                
+                // Adjust vertical position if bubble would go off-screen
+                if (bubbleY < screenBounds.Top)
+                    bubbleY = g.position.y + 20 + pad; // Draw below goose instead
+                else if (bubbleY + size.Height + pad * 2 > screenBounds.Bottom)
+                    bubbleY = screenBounds.Bottom - size.Height - pad * 2;
+            }
+            
             RectangleF rect = new RectangleF(
-                g.position.x - size.Width / 2 - pad,
-                g.position.y - 40 - size.Height - pad,
+                bubbleX,
+                bubbleY,
                 size.Width + pad * 2,
                 size.Height + pad * 2
             );
@@ -32,6 +59,11 @@ public static class SpeechBubble
             using (var brush2 = new SolidBrush(Color.Black))
                 gfx.DrawString(_text, font, brush2, rect.X + pad, rect.Y + pad);
         }
+    }
+    
+    private static Screen GetScreenForPoint(Point point)
+    {
+        return MultiMonitorHelper.GetScreenForPoint(point);
     }
 
     public static void Speak(string message)

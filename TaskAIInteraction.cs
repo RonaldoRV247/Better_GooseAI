@@ -3,6 +3,7 @@ using Microsoft.VisualBasic;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -45,7 +46,11 @@ public class TaskAIInteraction : GooseTaskInfo
 
     private void ShowInputPrompt(GooseEntity goose)
     {
-        var pt = new System.Drawing.Point((int)goose.position.x, (int)goose.position.y);
+        // Get goose position and ensure it's on a valid screen
+        var pt = new Point((int)goose.position.x, (int)goose.position.y);
+        
+        // Use helper to get the screen for goose position
+        Screen targetScreen = MultiMonitorHelper.GetScreenForPoint(pt);
 
         Task.Run(async () =>
         {
