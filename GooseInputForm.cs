@@ -1,44 +1,35 @@
-﻿using System;
+using GooseShared;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 
 public class GooseInputForm : Form
 {
     private GooseAIConfig _cfg = GooseAIConfig.Load();
-
     private readonly TextBox _input;
     private readonly Button _ok;
+    private readonly Button _cancel;
     private readonly Label _promptLabel;
+    internal static GooseInputForm _instance;
+    public static GooseEntity CurrentGoose { get; private set; }
+    public static event Action<string> OnInputSubmitted;
+    public string UserInput { get { return _input.Text; } }
 
-    private static GooseInputForm _instance;
-
-    public string UserInput => _input.Text;
-
-    private GooseInputForm(Point screenPos, string prompt)
+    private GooseInputForm(Point screenPos, string prompt, GooseEntity goose)
     {
+        CurrentGoose = goose;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.Manual;
         BackColor = Color.White;
         ForeColor = Color.Black;
         Padding = new Padding(10);
         
-        // Asegurar que el formulario tenga un tamaño inicial conocido
-        int formWidth = 300;
-        int formHeight = 120;
+        Location = new Point(screenPos.X, screenPos.Y - 45);
         
-        // Usar el helper para posicionar el formulario de manera segura
-        Point safePosition = MultiMonitorHelper.GetSafePopupPosition(
-            screenPos, -100, -80, formWidth, formHeight);
-        
-        Location = safePosition;
-        
-        // Asegurar que la ventana siempre esté visible
         TopMost = true;
         ShowInTaskbar = false;
-        
-        // Mejorar visibilidad
         Opacity = 0.95;
-        
+
         _promptLabel = new Label
         {
             Text = prompt,
@@ -64,31 +55,39 @@ public class GooseInputForm : Form
             Text = _cfg.bubbleEnterText,
             Parent = this,
             Location = new Point(Padding.Left, _input.Bottom + 5),
-            DialogResult = DialogResult.OK,
             Font = new Font("Arial", 10),
             Size = new Size(80, 25)
         };
-        _ok.Click += (s, e) => Close();
+        _ok.Click += (s, e) => 
+        {
+            var input = _input.Text; 
+            if (!string.IsNullOrWhiteSpace(input) && OnInputSubmitted != null) OnInputSubmitted(input); 
+            SafeClose();
+        };
+
+        _cancel = new Button
+        {
+            Text = "Cancel",
+            Parent = this,
+            Location = new Point(_ok.Right + 10, _input.Bottom + 5),
+            Font = new Font("Arial", 10),
+            Size = new Size(80, 25)
+        };
+        _cancel.Click += (s, e) => SafeClose();
 
         _input.KeyDown += (s, e) =>
         {
             if (e.KeyCode == Keys.Enter)
             {
-                e.Handled = true;
-                e.SuppressKeyPress = true;
-                DialogResult = DialogResult.OK;
-                Close();
+                e.Handled = true; e.SuppressKeyPress = true;
+                var input = _input.Text; 
+                if (!string.IsNullOrWhiteSpace(input) && OnInputSubmitted != null) OnInputSubmitted(input);
+                SafeClose();
             }
             else if (e.KeyCode == Keys.Escape)
-            {
-                e.Handled = true;
-                e.SuppressKeyPress = true;
-                DialogResult = DialogResult.Cancel;
-                Close();
-            }
+            { e.Handled = true; e.SuppressKeyPress = true; SafeClose(); }
         };
 
-        // Estilo de bordes redondeados
         Resize += (s, e) =>
         {
             int radius = 15;
@@ -101,14 +100,10 @@ public class GooseInputForm : Form
             Region = new Region(path);
         };
 
-        // Tamaño más generoso
-        Width = Padding.Horizontal + Math.Max(_promptLabel.PreferredWidth, _input.Width);
+        Width = Padding.Horizontal + Math.Max(_promptLabel.PreferredWidth, _input.Width + _ok.Width + 20);
         Height = _ok.Bottom + Padding.Bottom;
-        
-        // Asegurar tamaño mínimo
         MinimumSize = new Size(300, 120);
-        
-        // Añadir borde para mejor visibilidad
+
         Paint += (s, e) =>
         {
             using (var pen = new Pen(Color.Black, 2))
@@ -118,8 +113,6 @@ public class GooseInputForm : Form
                 e.Graphics.DrawArc(pen, Width - radius - 1, 0, radius, radius, 270, 90);
                 e.Graphics.DrawArc(pen, Width - radius - 1, Height - radius - 1, radius, radius, 0, 90);
                 e.Graphics.DrawArc(pen, 0, Height - radius - 1, radius, radius, 90, 90);
-                
-                // Líneas rectas entre los arcos
                 e.Graphics.DrawLine(pen, radius / 2, 0, Width - radius / 2 - 1, 0);
                 e.Graphics.DrawLine(pen, Width - 1, radius / 2, Width - 1, Height - radius / 2 - 1);
                 e.Graphics.DrawLine(pen, radius / 2, Height - 1, Width - radius / 2 - 1, Height - 1);
@@ -128,40 +121,51 @@ public class GooseInputForm : Form
         };
     }
 
-    public static string ShowAt(Point screenPos, string prompt)
+    public static void ShowAt(Point screenPos, string prompt, GooseEntity goose)
     {
-        // Cerrar instancia existente si la hay
-        if (_instance != null)
+        if (_instance != null) { _instance.Close(); _instance.Dispose(); _instance = null; }
+        _instance = new GooseInputForm(screenPos, prompt, goose);
+        _instance.Show();
+        _instance._input.Focus();
+        _instance.BringToFront();
+    }
+
+    public static void CloseCurrent()
+    {
+        if (_instance != null) 
         {
-            _instance.Close();
-            _instance.Dispose();
-            _instance = null;
+            OnInputSubmitted = null;
+            _instance.Close(); 
+            _instance.Dispose(); 
+            _instance = null; 
+            CurrentGoose = null; 
         }
-
-        // Asegurar que la posición esté dentro de los límites de alguna pantalla
-        Point safePosition = EnsurePositionOnScreen(screenPos);
-        
-        _instance = new GooseInputForm(safePosition, prompt);
-
-        _instance.Shown += (s, e) => _instance._input.Focus();
-
-        string input = string.Empty;
-        if (_instance.ShowDialog() == DialogResult.OK)
-            input = _instance.UserInput;
-
-        _instance.Dispose();
-        _instance = null;
-
-        return input;
     }
     
-    private static Point EnsurePositionOnScreen(Point position)
+    private void SafeClose()
     {
-        // Usar el helper para asegurarnos de que la posición está en una pantalla válida
-        Point safePosition = MultiMonitorHelper.EnsurePointOnScreen(position);
-        
-        // Luego ajustar para el tamaño del formulario
-        return MultiMonitorHelper.GetSafePopupPosition(
-            safePosition, -100, -80, 300, 120);
+        OnInputSubmitted = null;
+        Close();
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (e.CloseReason == CloseReason.UserClosing) 
+        {
+            e.Cancel = true; 
+            SafeClose();
+        }
+        base.OnFormClosing(e);
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        if (_instance == this) { _instance = null; CurrentGoose = null; }
+        base.OnFormClosed(e);
+    }
+    
+    public void UpdatePosition(Point goosePosition)
+    {
+        Location = new Point(goosePosition.X, goosePosition.Y - 45);
     }
 }

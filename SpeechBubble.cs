@@ -53,9 +53,9 @@ public static class SpeechBubble
             );
 
             using (var brush = new SolidBrush(Color.White))
-                gfx.FillRectangle(brush, rect);
+                gfx.FillRectangle(brush, Rectangle.Round(rect));
             using (var pen = new Pen(Color.Black, 2))
-                gfx.DrawRectangle(pen, rect);
+                gfx.DrawRectangle(pen, Rectangle.Round(rect));
             using (var brush2 = new SolidBrush(Color.Black))
                 gfx.DrawString(_text, font, brush2, rect.X + pad, rect.Y + pad);
         }
@@ -63,7 +63,12 @@ public static class SpeechBubble
     
     private static Screen GetScreenForPoint(Point point)
     {
-        return MultiMonitorHelper.GetScreenForPoint(point);
+        foreach (Screen screen in Screen.AllScreens)
+        {
+            if (screen.Bounds.Contains(point))
+                return screen;
+        }
+        return Screen.PrimaryScreen;
     }
 
     public static void Speak(string message)

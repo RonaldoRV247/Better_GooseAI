@@ -19,3 +19,12 @@ C:\Users\WaveT\Downloads\Desktop Goose v0.31\Desktop Goose v0.31\DesktopGoose v0
 C:\Users\WaveT\Downloads\Desktop Goose v0.31\Desktop Goose v0.31\DesktopGoose v0.31\FOR MOD-MAKERS\GooseMod_DefaultSolution\DefaultMod\bin\Release\GooseAI.pdb
 C:\Users\WaveT\Downloads\Desktop Goose v0.31\Desktop Goose v0.31\DesktopGoose v0.31\FOR MOD-MAKERS\GooseMod_DefaultSolution\DefaultMod\obj\Release\GooseAI.dll
 C:\Users\WaveT\Downloads\Desktop Goose v0.31\Desktop Goose v0.31\DesktopGoose v0.31\FOR MOD-MAKERS\GooseMod_DefaultSolution\DefaultMod\obj\Release\GooseAI.pdb
+D:\Usuario\SOPORTE\Videos\Better_GooseAI\obj\Release\GooseAI.dll
+D:\Usuario\SOPORTE\Videos\Better_GooseAI\obj\Release\GooseAI.pdb
+D:\Usuario\SOPORTE\Videos\Better_GooseAI\obj\Release\DefaultMod.csprojResolveAssemblyReference.cache
+D:\Usuario\SOPORTE\Videos\Better_GooseAI\bin\Release\GooseAI.dll
+D:\Usuario\SOPORTE\Videos\Better_GooseAI\bin\Release\GooseAI.pdb
+D:\Usuario\SOPORTE\Videos\Better_GooseAI\bin\Release\GooseModdingAPI.dll
+D:\Usuario\SOPORTE\Videos\Better_GooseAI\bin\Release\Newtonsoft.Json.xml
+D:\Usuario\SOPORTE\Videos\Better_GooseAI\bin\Release\System.Drawing.Common.pdb
+D:\Usuario\SOPORTE\Videos\Better_GooseAI\bin\Release\System.Drawing.Common.xml

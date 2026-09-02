@@ -1,0 +1,83 @@
+﻿using GooseShared;
+using System;
+using System.Drawing;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+public static class SpeechBubble
+{
+    private static string _text = string.Empty;
+    private static bool _visible = false;
+
+    // Attach this renderer in ModMain
+    public static void Draw(GooseEntity g, Graphics gfx)
+    {
+        if (!_visible || string.IsNullOrEmpty(_text))
+            return;
+
+        using (var font = new Font("Arial", 12))
+        {
+            SizeF size = gfx.MeasureString(_text, font);
+            const int pad = 6;
+            
+            // Calculate bubble position relative to goose
+            float bubbleX = g.position.x - size.Width / 2 - pad;
+            float bubbleY = g.position.y - 40 - size.Height - pad;
+            
+            // Get the screen where the goose is positioned
+            Point gooseScreenPos = new Point((int)g.position.x, (int)g.position.y);
+            Screen targetScreen = GetScreenForPoint(gooseScreenPos);
+            
+            if (targetScreen != null)
+            {
+                Rectangle screenBounds = targetScreen.Bounds;
+                
+                // Adjust horizontal position if bubble would go off-screen
+                if (bubbleX < screenBounds.Left)
+                    bubbleX = screenBounds.Left + pad;
+                else if (bubbleX + size.Width + pad * 2 > screenBounds.Right)
+                    bubbleX = screenBounds.Right - size.Width - pad * 2;
+                
+                // Adjust vertical position if bubble would go off-screen
+                if (bubbleY < screenBounds.Top)
+                    bubbleY = g.position.y + 20 + pad; // Draw below goose instead
+                else if (bubbleY + size.Height + pad * 2 > screenBounds.Bottom)
+                    bubbleY = screenBounds.Bottom - size.Height - pad * 2;
+            }
+            
+            RectangleF rect = new RectangleF(
+                bubbleX,
+                bubbleY,
+                size.Width + pad * 2,
+                size.Height + pad * 2
+            );
+
+            using (var brush = new SolidBrush(Color.White))
+                gfx.FillRectangle(brush, Rectangle.Round(rect));
+            using (var pen = new Pen(Color.Black, 2))
+                gfx.DrawRectangle(pen, Rectangle.Round(rect));
+            using (var brush2 = new SolidBrush(Color.Black))
+                gfx.DrawString(_text, font, brush2, rect.X + pad, rect.Y + pad);
+        }
+    }
+    
+    private static Screen GetScreenForPoint(Point point)
+    {
+        return MultiMonitorHelper.GetScreenForPoint(point);
+    }
+
+    public static void Speak(string message)
+    {
+        _text = message;
+        _visible = true;
+
+        // Calculate duration: base 2 seconds + 0.05 seconds per character
+        double seconds = 2 + (message.Length * 0.05);
+
+        Task.Factory.StartNew(() =>
+        {
+            Task.Delay(TimeSpan.FromSeconds(seconds)).Wait();
+            _visible = false;
+        });
+    }
+}

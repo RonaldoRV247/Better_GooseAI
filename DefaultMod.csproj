@@ -60,10 +60,9 @@
     <Compile Include="TaskAIInteraction.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\GooseModdingAPI\GooseModdingAPI.csproj">
-      <Project>{f0849c98-e0df-47a4-944e-377efac303f1}</Project>
-      <Name>GooseModdingAPI</Name>
-    </ProjectReference>
+    <Reference Include="GooseModdingAPI">
+      <HintPath>GooseModdingAPI.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

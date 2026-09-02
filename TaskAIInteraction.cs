@@ -1,4 +1,4 @@
-﻿using GooseShared;
+using GooseShared;
 using Microsoft.VisualBasic;
 using Newtonsoft.Json;
 using System;
@@ -13,8 +13,8 @@ using System.Windows.Forms;
 public class TaskAIInteraction : GooseTaskInfo
 {
     private GooseAIConfig _cfg = GooseAIConfig.Load();
-
-    private List<object> messageHistory;
+    private static List<object> messageHistory;
+    private static GooseEntity _currentGooseForCallback;
 
     public TaskAIInteraction()
     {
@@ -23,59 +23,72 @@ public class TaskAIInteraction : GooseTaskInfo
         description = "The goose interacts with the user using AI.";
         canBePickedRandomly = false;
 
-        _cfg = GooseAIConfig.Load();  // << load config first!
-
-        messageHistory = new List<object>
+        _cfg = GooseAIConfig.Load();
+        
+        if (messageHistory == null)
         {
-            new { role = "system", content = _cfg.systemPrompt }
-        };
+            messageHistory = new List<object>
+            {
+                new { role = "system", content = _cfg.systemPrompt }
+            };
+        }
     }
 
     public override GooseTaskData GetNewTaskData(GooseEntity goose)
     {
         return new TaskAIInteractionData();
     }
+    
     public override void RunTask(GooseEntity goose)
     {
-        // User tap triggers input prompt + AI response
         ShowInputPrompt(goose);
-
-        // Start idle chatter task (runs independently)
         StartIdleChatter(goose);
     }
 
     private void ShowInputPrompt(GooseEntity goose)
     {
-        // Get goose position and ensure it's on a valid screen
         var pt = new Point((int)goose.position.x, (int)goose.position.y);
         
-        // Use helper to get the screen for goose position
-        Screen targetScreen = MultiMonitorHelper.GetScreenForPoint(pt);
-
-        Task.Run(async () =>
+        _currentGooseForCallback = goose;
+        
+        // Suscribir al evento de input antes de mostrar el formulario
+        GooseInputForm.OnInputSubmitted += HandleInputSubmitted;
+        
+        // Mostrar el formulario
+        GooseInputForm.ShowAt(pt, _cfg.bubbleText, goose);
+    }
+    
+    private async void HandleInputSubmitted(string userInput)
+    {
+        if (string.IsNullOrWhiteSpace(userInput)) return;
+        
+        try
         {
-            try
-            {
-                string userInput = GooseInputForm.ShowAt(pt, _cfg.bubbleText);
-                if (string.IsNullOrWhiteSpace(userInput))
-                    return;
-
-                string aiResponse = await GetAIResponse(userInput);
-                string wrapped = WrapText(aiResponse, 50);
-
-                var control = new Control();
-                control.CreateControl();
-                control.Invoke((MethodInvoker)(() => SpeechBubble.Speak(wrapped)));
-            }
-            catch (Exception ex)
-            {
-                var control = new Control();
-                control.CreateControl();
-                control.Invoke((MethodInvoker)(() =>
-                    SpeechBubble.Speak("AI Error: " + (ex.InnerException?.Message ?? ex.Message))
-                ));
-            }
-        });
+            string aiResponse = await GetAIResponse(userInput);
+            string wrapped = WrapText(aiResponse, 50);
+            
+            var control = new Control();
+            control.CreateControl();
+            control.Invoke((MethodInvoker)(() => SpeechBubble.Speak(wrapped)));
+            
+            // Cerrar el formulario
+            GooseInputForm.CloseCurrent();
+        }
+        catch (Exception ex)
+        {
+            var control = new Control();
+            control.CreateControl();
+            string errorMsg = (ex.InnerException != null) ? ex.InnerException.Message : ex.Message;
+            control.Invoke((MethodInvoker)(() =>
+                SpeechBubble.Speak("AI Error: " + errorMsg)
+            ));
+            GooseInputForm.CloseCurrent();
+        }
+        finally
+        {
+            // Desuscribirse después de manejar el input
+            GooseInputForm.OnInputSubmitted -= HandleInputSubmitted;
+        }
     }
 
     private void StartIdleChatter(GooseEntity goose)
@@ -83,7 +96,7 @@ public class TaskAIInteraction : GooseTaskInfo
         Task.Run(async () =>
         {
             var lastPos = goose.position;
-            int idleTimeMs = 8000; // 8 seconds idle to start check
+            int idleTimeMs = 8000;
             int checkInterval = 500;
             int elapsed = 0;
             Random rand = new Random();
@@ -93,14 +106,12 @@ public class TaskAIInteraction : GooseTaskInfo
                 await Task.Delay(checkInterval);
                 elapsed += checkInterval;
 
-                // Reset idle if goose moved
                 if (goose.position.x != lastPos.x || goose.position.y != lastPos.y)
                 {
                     elapsed = 0;
                     lastPos = goose.position;
                 }
 
-                // If idle long enough, chance to speak
                 if (elapsed >= idleTimeMs)
                 {
                     if (rand.NextDouble() <= _cfg.chanceToSpeak)
@@ -113,7 +124,7 @@ public class TaskAIInteraction : GooseTaskInfo
                         control.CreateControl();
                         control.Invoke((MethodInvoker)(() => SpeechBubble.Speak(wrapped)));
 
-                        elapsed = 0; // reset idle timer after speaking
+                        elapsed = 0;
                     }
                 }
             }
@@ -146,7 +157,6 @@ public class TaskAIInteraction : GooseTaskInfo
         return sb.ToString();
     }
 
-
     private async Task<string> GetAIResponse(string userInput)
     {
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
@@ -170,7 +180,7 @@ public class TaskAIInteraction : GooseTaskInfo
             string json = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
-                throw new Exception($"HTTP {(int)response.StatusCode}: {json}");
+                throw new Exception(string.Format("HTTP {0}: {1}", (int)response.StatusCode, json));
 
             dynamic result = JsonConvert.DeserializeObject(json);
             string aiReply = result.choices[0].message.content;
@@ -180,7 +190,6 @@ public class TaskAIInteraction : GooseTaskInfo
             return aiReply;
         }
     }
-
 }
 
 public class TaskAIInteractionData : GooseTaskData
