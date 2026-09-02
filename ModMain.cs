@@ -12,10 +12,8 @@ public class ModMain : IMod
     // Form instance for position tracking
     private static GooseInputForm _inputForm = null;
 
-    // Double-click fields
-    private int _clickCount = 0;
+    // Click tracking fields
     private DateTime _lastClickTime = DateTime.MinValue;
-    private const int MaxClickIntervalMs = 500;
     private const float ClickRadius = 50f;
 
     [DllImport("User32.dll")]
@@ -41,16 +39,21 @@ public class ModMain : IMod
             _bubbleAttached = true;
         }
 
-        // Update input form position if it's open and input doesn't have focus
-        if (_inputForm != null && !_inputForm.IsInputFocused)
+        // Update input form position if it's open
+        if (_inputForm != null)
         {
-            _inputForm.UpdatePosition(new Point((int)goose.position.x, (int)goose.position.y));
+            // Only update position if user hasn't interacted with form yet
+            // Once user interacts (focuses input), form stays static for typing
+            if (!_inputForm.HasUserInteracted)
+            {
+                _inputForm.UpdatePosition(new Point((int)goose.position.x, (int)goose.position.y));
+            }
         }
 
         // Idle trigger
         CheckIdle(goose);
 
-        // Double-click trigger
+        // Single-click trigger
         CheckClicks(goose);
     }
 
@@ -78,15 +81,12 @@ public class ModMain : IMod
         if (isDown)
         {
             var now = DateTime.Now;
-            // reset if too slow
-            if ((now - _lastClickTime).TotalMilliseconds > MaxClickIntervalMs)
-                _clickCount = 0;
-
+            
             // get cursor pos in screen coords
             var cursor = Cursor.Position;
             
-            // If input form is open, ignore ALL clicks near the goose
-            // This prevents the goose from being dragged when user clicks on form
+            // If input form is open and cursor is near the form, ignore clicks
+            // This prevents the goose from being dragged when user interacts with form
             if (_inputForm != null)
             {
                 // Calculate expanded form bounds (include some padding)
@@ -99,11 +99,16 @@ public class ModMain : IMod
                 
                 if (formBounds.Contains(cursor))
                 {
-                    // Click is inside or very near the form - ignore it
-                    _clickCount = 0;
+                    // Click is inside or very near the form - ignore it for goose drag
+                    // But still allow form interaction
                     _lastClickTime = now;
                     return;
                 }
+                
+                // If form is open but click is not near it, close the form
+                _inputForm.Close();
+                _inputForm.Dispose();
+                _inputForm = null;
             }
 
             // game coords are also screen coords for Desktop Goose
@@ -111,20 +116,15 @@ public class ModMain : IMod
             float dy = cursor.Y - goose.position.y;
             if (dx * dx + dy * dy < ClickRadius * ClickRadius)
             {
-                _clickCount++;
-                if (_clickCount >= 2)
+                // Single click to open input form
+                // Only trigger if input form is not already open
+                if (_inputForm == null)
                 {
-                    // Only trigger if input form is not already open
-                    if (_inputForm == null)
-                    {
-                        new TaskAIInteraction().RunTask(goose);
-                    }
-                    _clickCount = 0;
+                    new TaskAIInteraction().RunTask(goose);
+                    // Return to prevent goose from processing this click
+                    _lastClickTime = now;
+                    return;
                 }
-            }
-            else
-            {
-                _clickCount = 0;
             }
             _lastClickTime = now;
         }

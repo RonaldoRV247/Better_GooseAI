@@ -1,6 +1,7 @@
 using GooseShared;
 using System;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 public class GooseInputForm : Form
@@ -12,10 +13,29 @@ public class GooseInputForm : Form
     private readonly Label _promptLabel;
     private readonly Action<string> _onSubmit;
     private readonly Timer _autoCloseTimer;
+    private readonly Timer _activityTimer;
+    
+    // Flag to track if user has interacted with the form
+    public bool HasUserInteracted { get; private set; }
+    
+    // Win32 API for setting foreground window
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetForegroundWindow(IntPtr hWnd);
+    
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_SHOWWINDOW = 0x0040;
 
     public GooseInputForm(Point screenPos, string prompt, GooseEntity goose, Action<string> onSubmit)
     {
         _onSubmit = onSubmit;
+        HasUserInteracted = false;
         
         // Sin botones de maximizar/minimizar
         FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -32,6 +52,10 @@ public class GooseInputForm : Form
         TopMost = true;
         ShowInTaskbar = false;
         Opacity = 0.95;
+        
+        // Configurar para que el formulario no robe el foco del input
+        SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+        SetStyle(ControlStyles.AllPaintingInWmPaint, true);
 
         _promptLabel = new Label
         {
@@ -116,16 +140,19 @@ public class GooseInputForm : Form
             }
         };
         
-        // Auto-close timer: 15 seconds
+        // Auto-close after 15 seconds
         _autoCloseTimer = new Timer { Interval = 15000, Enabled = true };
-        _autoCloseTimer.Tick += (s, e) => Close();
+        _autoCloseTimer.Tick += (s, args) => Close();
         
-        // Reset timer on any activity
-        _input.KeyDown += (s, e) => { _autoCloseTimer.Stop(); _autoCloseTimer.Start(); };
-        _ok.Click += (s, e) => _autoCloseTimer.Stop();
-        _cancel.Click += (s, e) => _autoCloseTimer.Stop();
-        this.MouseMove += (s, e) => { _autoCloseTimer.Stop(); _autoCloseTimer.Start(); };
-        this.MouseDown += (s, e) => { _autoCloseTimer.Stop(); _autoCloseTimer.Start(); };
+        // Timer para resetear el auto-close cuando hay actividad
+        _activityTimer = new Timer { Interval = 500, Enabled = true };
+        _activityTimer.Tick += (s, args) => 
+        {
+            if (_input.Focused)
+                _autoCloseTimer.Stop();
+            else
+                _autoCloseTimer.Start();
+        };
     }
 
     private void HandleSubmit()
@@ -146,8 +173,56 @@ public class GooseInputForm : Form
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        // Force focus to input box
         this.Activate();
+        this.BringToFront();
+        
+        // Force this window to be foreground
+        SetForegroundWindow(this.Handle);
+        
+        // Retrasar el enfoque para asegurar que el formulario esté completamente mostrado
+        BeginInvoke((MethodInvoker)delegate {
+            _input.Focus();
+            _input.Select();
+        });
+    }
+    
+    protected override void OnDeactivate(EventArgs e)
+    {
+        base.OnDeactivate(e);
+    }
+    
+    protected override void OnGotFocus(EventArgs e)
+    {
+        base.OnGotFocus(e);
         _input.Focus();
+        _input.Select();
+        HasUserInteracted = true;
+    }
+    
+    // Also mark as interacted when any mouse down happens on the form
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        HasUserInteracted = true;
+        _input.Focus();
+        _input.Select();
+        // Force focus back to this window
+        SetForegroundWindow(this.Handle);
+    }
+    
+    protected override void OnLostFocus(EventArgs e)
+    {
+        base.OnLostFocus(e);
+        // Try to regain focus
+        BeginInvoke((MethodInvoker)delegate {
+            SetForegroundWindow(this.Handle);
+            _input.Focus();
+            _input.Select();
+        });
+    }
+    
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
     }
 }
